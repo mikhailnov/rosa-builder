@@ -515,10 +515,11 @@ do
 	eval "COUNTED_TIME_SEC_${action}"="$(date -u -d "@$(echo "${END_TIME}-${START_TIME}" | bc)" +"%T")"
 done
 
+# wipe package
+rm -rf ${HOME}/${PACKAGE:?}
+
 # show counted timings
+set +x
 echo ""
 echo "--> Time spent:"
 declare -p | grep COUNTED_TIME_SEC_ | awk -F 'COUNTED_TIME_SEC_' '{print $NF}'
-
-# wipe package
-rm -rf ${HOME}/${PACKAGE:?}

@@ -501,10 +501,24 @@ popd
 # build package
 }
 
-generate_config
-clone_repo
-download_cache
-build_rpm
-container_data
+for action in \
+	generate_config \
+	clone_repo \
+	download_cache \
+	build_rpm \
+	container_data
+do
+	START_TIME="$(date +%s)"
+	eval "${action}"
+	END_TIME="$(date +%s)"
+	# date -u -d @<seconds> +"%T", https://stackoverflow.com/a/13422982
+	eval "COUNTED_TIME_SEC_${action}"="$(date -u -d "@$(echo "${END_TIME}-${START_TIME}" | bc)" +"%T")"
+done
+
+# show counted timings
+echo ""
+echo "--> Time spent:"
+declare -p | grep COUNTED_TIME_SEC_ | awk -F 'COUNTED_TIME_SEC_' '{print $NF}'
+
 # wipe package
 rm -rf ${HOME}/${PACKAGE:?}

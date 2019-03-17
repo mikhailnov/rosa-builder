@@ -276,6 +276,8 @@ arm_platform_detector
 # We will rerun the build in case when repository is modified in the middle,
 # but for safety let's limit number of retest attempts
 # (since in case when repository metadata is really broken we can loop here forever)
+
+
 MAX_RETRIES=10
 WAIT_TIME=60
 RETRY_GREP_STR="You may need to update your urpmi database\|problem reading synthesis file of medium\|retrieving failed: "
@@ -285,6 +287,9 @@ if [ "$rerun_tests" = 'true' ]; then
     return 0
 fi
 
+sudo touch -d "23 hours ago" $config_dir/default.cfg
+
+spec_name=`ls -1 $build_package | grep '.spec$'`
 echo '--> Build src.rpm'
 try_rebuild=true
 retry=0
@@ -307,9 +312,9 @@ do
 		sleep ${WAIT_TIME}
 	    fi
 	fi
-	$MOCK_BIN -v --configdir=$config_dir --buildsrpm --spec=$build_package/${PACKAGE}.spec --sources=$build_package --no-cleanup-after --no-clean $extra_build_src_rpm_options --resultdir=$OUTPUT_FOLDER
+	$MOCK_BIN -v --configdir=$config_dir --buildsrpm --spec=$build_package/${spec_name} --sources=$build_package --no-cleanup-after --no-clean $extra_build_src_rpm_options --resultdir=$OUTPUT_FOLDER
     else
-	$MOCK_BIN -v --configdir=$config_dir --buildsrpm --spec=$build_package/${PACKAGE}.spec --sources=$build_package --no-cleanup-after $extra_build_src_rpm_options --resultdir=$OUTPUT_FOLDER
+	$MOCK_BIN -v --configdir=$config_dir --buildsrpm --spec=$build_package/${spec_name} --sources=$build_package --no-cleanup-after $extra_build_src_rpm_options --resultdir=$OUTPUT_FOLDER
     fi
 
     rc=${PIPESTATUS[0]}
@@ -343,6 +348,8 @@ try_rebuild=true
 retry=0
 while $try_rebuild
 do
+    $MOCK_BIN --chroot "urpmi.removemedia -a" --resultdir=$OUTPUT_FOLDER
+    $MOCK_BIN --readdrepo -v --configdir $config_dir --resultdir=$OUTPUT_FOLDER
     $MOCK_BIN -v --configdir=$config_dir --rebuild $OUTPUT_FOLDER/*.src.rpm --no-cleanup-after --no-clean $extra_build_rpm_options --resultdir=$OUTPUT_FOLDER
     rc=${PIPESTATUS[0]}
     try_rebuild=false
@@ -373,7 +380,8 @@ echo '--> Done.'
 echo "--> Grepping rpmlint logs from $OUTPUT_FOLDER/build.log to $OUTPUT_FOLDER/rpmlint.log"
 sed -n "/Executing \"\/usr\/bin\/rpmlint/,/packages and.*specfiles checked/p" $OUTPUT_FOLDER/build.log > $OUTPUT_FOLDER/rpmlint.log
 echo '--> Create rpm -qa list'
-rpm --root=/var/lib/mock-urpm/$platform_name-$platform_arch/root/ -qa >> $OUTPUT_FOLDER/rpm-qa.log
+CHROOT_PATH=$($MOCK_BIN --configdir=$config_dir --print-root-path)
+rpm --root=$CHROOT_PATH -qa >> $OUTPUT_FOLDER/rpm-qa.log
 
 # (tpg) Save build chroot
 if [ "${rc}" != 0 ] && [ "${save_buildroot}" = 'true' ]; then
@@ -381,7 +389,9 @@ if [ "${rc}" != 0 ] && [ "${save_buildroot}" = 'true' ]; then
 fi
 
 # Test RPM files
-test_rpm
+if [ "$use_extra_tests" = 'true' ]; then
+    test_rpm
+fi
 # End tests
 
 }
